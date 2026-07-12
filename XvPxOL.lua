@@ -5,7 +5,6 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local HttpService = game:GetService("HttpService")
-local TextService = game:GetService("TextService")
 
 local XvPxOL = {
 	Elements = {},
@@ -24,32 +23,7 @@ local XvPxOL = {
 	},
 	SelectedTheme = "Default",
 	Folder = nil,
-	SaveCfg = false,
-	Registry = {},
-	DPIRegistry = {},
-	DPIScale = 1,
-	CornerRadius = 6,
-	IsLightTheme = true,
-	Scheme = {
-		BackgroundColor = Color3.fromRGB(240, 243, 250),
-		MainColor = Color3.fromRGB(225, 235, 255),
-		AccentColor = Color3.fromRGB(100, 160, 230),
-		OutlineColor = Color3.fromRGB(100, 160, 230),
-		FontColor = Color3.fromRGB(60, 130, 210),
-		Red = Color3.fromRGB(255, 80, 80),
-		Dark = Color3.fromRGB(30, 30, 35),
-		White = Color3.fromRGB(255, 255, 255),
-	},
-	SearchText = "",
-	Searching = false,
-	ActiveTab = nil,
-	Tabs = {},
-	DependencyBoxes = {},
-	Signals = {},
-	UnloadSignals = {},
-	MinSize = Vector2.new(480, 300),
-	Toggled = true,
-	Unloaded = false,
+	SaveCfg = false
 }
 
 -- Feather Icons
@@ -71,45 +45,93 @@ XvPxOL.Themes.Default = {
 	TextDark = Color3.fromRGB(120, 170, 230)
 }
 
-local Orion = Instance.new("ScreenGui")
-Orion.Name = "XvPxOL"
-Orion.ResetOnSpawn = false
-Orion.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-Orion.DisplayOrder = 999
+-- 创建ScreenGui
+local XvPxOL_UI = Instance.new("ScreenGui")
+XvPxOL_UI.Name = "XvPxOL"
+XvPxOL_UI.ResetOnSpawn = false
+XvPxOL_UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-if syn then syn.protect_gui(Orion); Orion.Parent = game.CoreGui
-else Orion.Parent = gethui() or game.CoreGui end
+if syn then
+	syn.protect_gui(XvPxOL_UI)
+	XvPxOL_UI.Parent = game.CoreGui
+else
+	XvPxOL_UI.Parent = gethui() or game.CoreGui
+end
 
+-- 清理旧UI
 if gethui then
-	for _, v in ipairs(gethui():GetChildren()) do
-		if v.Name == Orion.Name and v ~= Orion then v:Destroy() end
+	for _, Interface in ipairs(gethui():GetChildren()) do
+		if Interface.Name == XvPxOL_UI.Name and Interface ~= XvPxOL_UI then
+			Interface:Destroy()
+		end
 	end
 else
-	for _, v in ipairs(game.CoreGui:GetChildren()) do
-		if v.Name == Orion.Name and v ~= Orion then v:Destroy() end
+	for _, Interface in ipairs(game.CoreGui:GetChildren()) do
+		if Interface.Name == XvPxOL_UI.Name and Interface ~= XvPxOL_UI then
+			Interface:Destroy()
+		end
 	end
 end
 
 function XvPxOL:IsRunning()
-	if gethui then return Orion.Parent == gethui() else return Orion.Parent == game.CoreGui end
+	if gethui then
+		return XvPxOL_UI.Parent == gethui()
+	else
+		return XvPxOL_UI.Parent == game:GetService("CoreGui")
+	end
 end
 
-local function AddConnection(Signal, Func)
-	if not XvPxOL:IsRunning() then return end
-	local c = Signal:Connect(Func); table.insert(XvPxOL.Connections, c); return c
+local function AddConnection(Signal, Function)
+	if (not XvPxOL:IsRunning()) then return end
+	local SignalConnect = Signal:Connect(Function)
+	table.insert(XvPxOL.Connections, SignalConnect)
+	return SignalConnect
 end
 
 task.spawn(function()
-	while XvPxOL:IsRunning() do task.wait() end
-	for _, c in next, XvPxOL.Connections do c:Disconnect() end
+	while (XvPxOL:IsRunning()) do task.wait() end
+	for _, Connection in next, XvPxOL.Connections do Connection:Disconnect() end
 end)
 
--- 工具函数
+-- 拖拽函数
+local function MakeDraggable(guiObject, mainFrame)
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+
+	guiObject.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = mainFrame.Position
+		end
+	end)
+
+	guiObject.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			mainFrame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+end
+
+-- 创建函数
 local function Create(Name, Properties, Children)
-	local obj = Instance.new(Name)
-	for i, v in next, Properties or {} do obj[i] = v end
-	for i, v in next, Children or {} do v.Parent = obj end
-	return obj
+	local Object = Instance.new(Name)
+	for i, v in next, Properties or {} do Object[i] = v end
+	for i, v in next, Children or {} do v.Parent = Object end
+	return Object
 end
 
 local function CreateElement(ElementName, ElementFunction)
@@ -121,115 +143,58 @@ local function MakeElement(ElementName, ...)
 end
 
 local function SetProps(Element, Props)
-	for k, v in pairs(Props) do pcall(function() Element[k] = v end) end
+	table.foreach(Props, function(Property, Value) Element[Property] = Value end)
 	return Element
 end
 
 local function SetChildren(Element, Children)
-	for _, v in pairs(Children) do v.Parent = Element end
+	table.foreach(Children, function(_, Child) Child.Parent = Element end)
 	return Element
 end
 
 local function Round(Number, Factor)
-	local r = math.floor(Number/Factor + (math.sign(Number) * 0.5)) * Factor
-	if r < 0 then r = r + Factor end
-	return r
+	local Result = math.floor(Number/Factor + (math.sign(Number) * 0.5)) * Factor
+	if Result < 0 then Result = Result + Factor end
+	return Result
 end
 
 local function ReturnProperty(Object)
-	if Object:IsA("Frame") or Object:IsA("TextButton") then return "BackgroundColor3"
-	elseif Object:IsA("ScrollingFrame") then return "ScrollBarImageColor3"
-	elseif Object:IsA("UIStroke") then return "Color"
-	elseif Object:IsA("TextLabel") or Object:IsA("TextBox") then return "TextColor3"
-	elseif Object:IsA("ImageLabel") or Object:IsA("ImageButton") then return "ImageColor3" end
+	if Object:IsA("Frame") or Object:IsA("TextButton") then return "BackgroundColor3" end
+	if Object:IsA("ScrollingFrame") then return "ScrollBarImageColor3" end
+	if Object:IsA("UIStroke") then return "Color" end
+	if Object:IsA("TextLabel") or Object:IsA("TextBox") then return "TextColor3" end
+	if Object:IsA("ImageLabel") or Object:IsA("ImageButton") then return "ImageColor3" end
 end
 
 local function AddThemeObject(Object, Type)
 	if not XvPxOL.ThemeObjects[Type] then XvPxOL.ThemeObjects[Type] = {} end
 	table.insert(XvPxOL.ThemeObjects[Type], Object)
-	pcall(function() Object[ReturnProperty(Object)] = XvPxOL.Themes[XvPxOL.SelectedTheme][Type] end)
+	Object[ReturnProperty(Object)] = XvPxOL.Themes[XvPxOL.SelectedTheme][Type]
 	return Object
 end
 
--- 彩虹颜色注册系统(从Obsidian搬)
-function XvPxOL:AddToRegistry(Instance, Properties)
-	XvPxOL.Registry[Instance] = Properties
+local function PackColor(Color)
+	return {R = Color.R * 255, G = Color.G * 255, B = Color.B * 255}
 end
 
-function XvPxOL:UpdateColorsUsingRegistry()
-	for Instance, Properties in pairs(XvPxOL.Registry) do
-		for Property, ColorIdx in pairs(Properties) do
-			if typeof(ColorIdx) == "string" then
-				if ColorIdx == "BackgroundColor" then
-					Instance[Property] = Color3.fromHSV((tick() * 0.3) % 1, 0.8, 0.15)
-				elseif ColorIdx == "MainColor" then
-					Instance[Property] = Color3.fromHSV((tick() * 0.3) % 1, 0.8, 0.25)
-				elseif ColorIdx == "AccentColor" then
-					Instance[Property] = Color3.fromHSV((tick() * 0.5) % 1, 0.8, 1)
-				elseif ColorIdx == "OutlineColor" then
-					Instance[Property] = Color3.fromHSV((tick() * 0.3) % 1, 0.8, 0.4)
-				elseif ColorIdx == "FontColor" then
-					Instance[Property] = Color3.fromHSV((tick() * 0.5) % 1, 0.8, 1)
-				else
-					Instance[Property] = XvPxOL.Scheme[ColorIdx]
-				end
-			elseif typeof(ColorIdx) == "function" then
-				Instance[Property] = ColorIdx()
-			end
-		end
-	end
-end
-
-function XvPxOL:StartRainbowEffect()
-	if self.RainbowConnection then self.RainbowConnection:Disconnect() end
-	self.RainbowConnection = RunService.RenderStepped:Connect(function()
-		self:UpdateColorsUsingRegistry()
-	end)
-end
-
-function XvPxOL:StopRainbowEffect()
-	if self.RainbowConnection then
-		self.RainbowConnection:Disconnect()
-		self.RainbowConnection = nil
-	end
-end
-
--- 文本大小计算(从Obsidian搬)
-function XvPxOL:GetTextBounds(Text, Font, Size, Width)
-	local Params = Instance.new("GetTextBoundsParams")
-	Params.Text = Text
-	Params.RichText = true
-	Params.Font = Font or Enum.Font.Gotham
-	Params.Size = Size or 14
-	Params.Width = Width or workspace.CurrentCamera.ViewportSize.X - 32
-	local Bounds = TextService:GetTextBoundsAsync(Params)
-	return Bounds.X, Bounds.Y
-end
-
--- 鼠标悬停检测(从Obsidian搬)
-function XvPxOL:MouseIsOverFrame(Frame, MousePos)
-	local AbsPos, AbsSize = Frame.AbsolutePosition, Frame.AbsoluteSize
-	return MousePos.X >= AbsPos.X and MousePos.X <= AbsPos.X + AbsSize.X
-		and MousePos.Y >= AbsPos.Y and MousePos.Y <= AbsPos.Y + AbsSize.Y
-end
-
--- 安全回调(从Obsidian搬)
-function XvPxOL:SafeCallback(Func, ...)
-	if not (Func and typeof(Func) == "function") then return end
-	local Result = table.pack(xpcall(Func, function(Error)
-		task.defer(error, debug.traceback(Error, 2))
-		return Error
-	end, ...))
-	if not Result[1] then return nil end
-	return table.unpack(Result, 2, Result.n)
+local function UnpackColor(Color)
+	return Color3.fromRGB(Color.R, Color.G, Color.B)
 end
 
 local function SaveCfg(Name)
 	local Data = {}
 	for i, v in pairs(XvPxOL.Flags) do
-		if v.Save then Data[i] = v.Value end
+		if v.Save then
+			if v.Type == "Colorpicker" then
+				Data[i] = PackColor(v.Value)
+			else
+				Data[i] = v.Value
+			end
+		end
 	end
-	if XvPxOL.Folder then writefile(XvPxOL.Folder .. "/" .. Name .. ".txt", HttpService:JSONEncode(Data)) end
+	if XvPxOL.Folder then
+		writefile(XvPxOL.Folder .. "/" .. Name .. ".txt", tostring(HttpService:JSONEncode(Data)))
+	end
 end
 
 local WhitelistedMouse = {Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3}
@@ -239,20 +204,7 @@ local function CheckKey(Table, Key)
 	for _, v in next, Table do if v == Key then return true end end
 end
 
--- 元素创建函数
-CreateElement("Corner", function(Scale, Offset) return Create("UICorner", {CornerRadius = UDim.new(Scale or 0, Offset or 8)}) end)
-CreateElement("Stroke", function(Color, Thickness) return Create("UIStroke", {Color = Color or Color3.fromRGB(100, 160, 230), Thickness = Thickness or 1.2}) end)
-CreateElement("List", function(Scale, Offset) return Create("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(Scale or 0, Offset or 0)}) end)
-CreateElement("Padding", function(Bottom, Left, Right, Top) return Create("UIPadding", {PaddingBottom = UDim.new(0, Bottom or 4), PaddingLeft = UDim.new(0, Left or 4), PaddingRight = UDim.new(0, Right or 4), PaddingTop = UDim.new(0, Top or 4)}) end)
-CreateElement("TFrame", function() return Create("Frame", {BackgroundTransparency = 1}) end)
-CreateElement("Frame", function(Color) return Create("Frame", {BackgroundColor3 = Color or Color3.fromRGB(255,255,255), BorderSizePixel = 0}) end)
-CreateElement("RoundFrame", function(Color, Scale, Offset) return Create("Frame", {BackgroundColor3 = Color or Color3.fromRGB(255,255,255), BorderSizePixel = 0, BackgroundTransparency = 0.15}, {Create("UICorner", {CornerRadius = UDim.new(Scale, Offset)})}) end)
-CreateElement("Button", function() return Create("TextButton", {Text = "", AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0}) end)
-CreateElement("ScrollFrame", function(Color, Width) return Create("ScrollingFrame", {BackgroundTransparency = 1, MidImage = "rbxassetid://7445543667", BottomImage = "rbxassetid://7445543667", TopImage = "rbxassetid://7445543667", ScrollBarImageColor3 = Color, BorderSizePixel = 0, ScrollBarThickness = Width, CanvasSize = UDim2.new(0,0,0,0)}) end)
-CreateElement("Image", function(ImageID) local img = Create("ImageLabel", {Image = ImageID, BackgroundTransparency = 1}); if GetIcon(ImageID) ~= nil then img.Image = GetIcon(ImageID) end; return img end)
-CreateElement("Label", function(Text, TextSize, Transparency) return Create("TextLabel", {Text = Text or "", TextColor3 = Color3.fromRGB(60,130,210), TextTransparency = Transparency or 0, TextSize = TextSize or 14, Font = Enum.Font.Gotham, RichText = true, BackgroundTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left}) end)
-
--- 彩虹边框函数(从Rainmiao库搬来)
+-- 彩虹边框函数（从Rainmiao搬来并增强）
 local function CreateRainbowBorder(parent, thickness, cornerRadius)
 	local border = Instance.new("Frame")
 	border.BackgroundTransparency = 1
@@ -292,6 +244,7 @@ local function CreateRainbowBorder(parent, thickness, cornerRadius)
 		Instance.new("UICorner", inner).CornerRadius = UDim.new(0, cornerRadius)
 	end
 	
+	-- 彩虹旋转动画
 	spawn(function()
 		while border and border.Parent do
 			gradient.Rotation = (gradient.Rotation + 0.5) % 360
@@ -299,36 +252,78 @@ local function CreateRainbowBorder(parent, thickness, cornerRadius)
 		end
 	end)
 	
-	return border
+	return border, gradient
 end
 
--- 拖拽函数(从Obsidian搬)
-local function MakeDraggable(UI, DragFrame)
-	local StartPos, FramePos, Dragging = nil, nil, false
-	local Changed
-	
-	DragFrame.InputBegan:Connect(function(Input)
-		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-			StartPos = Input.Position
-			FramePos = UI.Position
-			Dragging = true
-			
-			Changed = Input.Changed:Connect(function()
-				if Input.UserInputState ~= Enum.UserInputState.End then return end
-				Dragging = false
-				if Changed and Changed.Connected then Changed:Disconnect(); Changed = nil end
-			end)
+-- 涟漪效果（从Rainmiao搬来）
+local function Ripple(obj)
+	spawn(function()
+		if obj.ClipsDescendants ~= true then
+			obj.ClipsDescendants = true
 		end
-	end)
-	
-	AddConnection(UserInputService.InputChanged, function(Input)
-		if not (Orion and Orion.Parent) then Dragging = false; return end
-		if Dragging and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
-			local Delta = Input.Position - StartPos
-			UI.Position = UDim2.new(FramePos.X.Scale, FramePos.X.Offset + Delta.X, FramePos.Y.Scale, FramePos.Y.Offset + Delta.Y)
-		end
+		local RippleEffect = Instance.new("ImageLabel")
+		RippleEffect.Name = "Ripple"
+		RippleEffect.Parent = obj
+		RippleEffect.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		RippleEffect.BackgroundTransparency = 1.000
+		RippleEffect.ZIndex = 8
+		RippleEffect.Image = "rbxassetid://2708891598"
+		RippleEffect.ImageTransparency = 0.800
+		RippleEffect.ScaleType = Enum.ScaleType.Fit
+		RippleEffect.ImageColor3 = Color3.fromRGB(255, 255, 255)
+		RippleEffect.Position = UDim2.new(
+			(Mouse.X - RippleEffect.AbsolutePosition.X) / obj.AbsoluteSize.X,
+			0,
+			(Mouse.Y - RippleEffect.AbsolutePosition.Y) / obj.AbsoluteSize.Y,
+			0
+		)
+		TweenService:Create(RippleEffect, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
+			Position = UDim2.new(-5.5, 0, -5.5, 0),
+			Size = UDim2.new(12, 0, 12, 0)
+		}):Play()
+		task.wait(0.15)
+		TweenService:Create(RippleEffect, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
+			ImageTransparency = 1
+		}):Play()
+		task.wait(0.3)
+		RippleEffect:Destroy()
 	end)
 end
+
+-- 渐变边框函数（从Rainmiao搬来）
+local function addGradientStroke(parent)
+	local layers = {
+		{ color = Color3.fromRGB(100, 160, 230), thickness = 1.2, transparency = 0.0 },
+		{ color = Color3.fromRGB(130, 180, 240), thickness = 2.0, transparency = 0.2 },
+		{ color = Color3.fromRGB(160, 200, 250), thickness = 2.8, transparency = 0.4 },
+	}
+	local strokes = {}
+	for i, layer in ipairs(layers) do
+		local stroke = Instance.new("UIStroke")
+		stroke.Name = "GradientStrokeLayer" .. i
+		stroke.Parent = parent
+		stroke.Color = layer.color
+		stroke.Thickness = layer.thickness
+		stroke.Transparency = layer.transparency
+		stroke.LineJoinMode = Enum.LineJoinMode.Round
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		table.insert(strokes, stroke)
+	end
+	return strokes
+end
+
+-- 元素创建函数
+CreateElement("Corner", function(Scale, Offset) return Create("UICorner", {CornerRadius = UDim.new(Scale or 0, Offset or 8)}) end)
+CreateElement("Stroke", function(Color, Thickness) return Create("UIStroke", {Color = Color or Color3.fromRGB(100, 160, 230), Thickness = Thickness or 1.2}) end)
+CreateElement("List", function(Scale, Offset) return Create("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(Scale or 0, Offset or 0)}) end)
+CreateElement("Padding", function(Bottom, Left, Right, Top) return Create("UIPadding", {PaddingBottom = UDim.new(0, Bottom or 4), PaddingLeft = UDim.new(0, Left or 4), PaddingRight = UDim.new(0, Right or 4), PaddingTop = UDim.new(0, Top or 4)}) end)
+CreateElement("TFrame", function() return Create("Frame", {BackgroundTransparency = 1}) end)
+CreateElement("Frame", function(Color) return Create("Frame", {BackgroundColor3 = Color or Color3.fromRGB(255,255,255), BorderSizePixel = 0}) end)
+CreateElement("RoundFrame", function(Color, Scale, Offset) return Create("Frame", {BackgroundColor3 = Color or Color3.fromRGB(255,255,255), BorderSizePixel = 0, BackgroundTransparency = 0.15}, {Create("UICorner", {CornerRadius = UDim.new(Scale, Offset)})}) end)
+CreateElement("Button", function() return Create("TextButton", {Text = "", AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0}) end)
+CreateElement("ScrollFrame", function(Color, Width) return Create("ScrollingFrame", {BackgroundTransparency = 1, MidImage = "rbxassetid://7445543667", BottomImage = "rbxassetid://7445543667", TopImage = "rbxassetid://7445543667", ScrollBarImageColor3 = Color, BorderSizePixel = 0, ScrollBarThickness = Width, CanvasSize = UDim2.new(0,0,0,0)}) end)
+CreateElement("Image", function(ImageID) local img = Create("ImageLabel", {Image = ImageID, BackgroundTransparency = 1}); if GetIcon(ImageID) ~= nil then img.Image = GetIcon(ImageID) end; return img end)
+CreateElement("Label", function(Text, TextSize, Transparency) return Create("TextLabel", {Text = Text or "", TextColor3 = Color3.fromRGB(60,130,210), TextTransparency = Transparency or 0, TextSize = TextSize or 14, Font = Enum.Font.Gotham, RichText = true, BackgroundTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left}) end)
 
 -- ============ 悬浮窗 ============
 local FloatContainer = Instance.new("Frame")
@@ -336,11 +331,13 @@ FloatContainer.Size = UDim2.new(0, 68, 0, 68)
 FloatContainer.Position = UDim2.new(0, 20, 0.5, -34)
 FloatContainer.BackgroundTransparency = 1
 FloatContainer.Name = "FloatContainer"
-FloatContainer.Parent = Orion
+FloatContainer.Parent = XvPxOL_UI
 
+-- 彩虹边框
 local FloatBorder = Instance.new("Frame")
 FloatBorder.BackgroundTransparency = 1
 FloatBorder.Size = UDim2.new(1, 0, 1, 0)
+FloatBorder.Name = "FloatBorder"
 FloatBorder.Parent = FloatContainer
 
 local FloatGradient = Instance.new("UIGradient")
@@ -410,28 +407,60 @@ end
 -- ============ 通知系统 ============
 local NotificationHolder = SetProps(SetChildren(MakeElement("TFrame"), {
 	SetProps(MakeElement("List"), {HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 5)})
-}), {Position = UDim2.new(1, -25, 1, -25), Size = UDim2.new(0, 280, 1, -25), AnchorPoint = Vector2.new(1, 1), Parent = Orion})
+}), {Position = UDim2.new(1, -25, 1, -25), Size = UDim2.new(0, 280, 1, -25), AnchorPoint = Vector2.new(1, 1), Parent = XvPxOL_UI})
 
 function XvPxOL:MakeNotification(NotificationConfig)
 	spawn(function()
 		NotificationConfig.Name = NotificationConfig.Name or "通知"
 		NotificationConfig.Content = NotificationConfig.Content or "内容"
+		NotificationConfig.Image = NotificationConfig.Image or "rbxassetid://4384403532"
 		NotificationConfig.Time = NotificationConfig.Time or 15
 
-		local NotificationParent = SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Parent = NotificationHolder})
+		local NotificationParent = SetProps(MakeElement("TFrame"), {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Parent = NotificationHolder
+		})
+
 		local NotificationFrame = SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(245, 248, 255), 0, 8), {
-			Parent = NotificationParent, Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(1, -55, 0, 0), BackgroundTransparency = 0.2, AutomaticSize = Enum.AutomaticSize.Y
+			Parent = NotificationParent,
+			Size = UDim2.new(1, 0, 0, 0),
+			Position = UDim2.new(1, -55, 0, 0),
+			BackgroundTransparency = 0.2,
+			AutomaticSize = Enum.AutomaticSize.Y
 		}), {
-			MakeElement("Stroke", Color3.fromRGB(100, 160, 230), 1), MakeElement("Padding", 10, 10, 10, 10),
-			SetProps(MakeElement("Label", NotificationConfig.Name, 14), {Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.GothamBold, Name = "Title"}),
-			SetProps(MakeElement("Label", NotificationConfig.Content, 13), {Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 22), Font = Enum.Font.GothamSemibold, Name = "Content", AutomaticSize = Enum.AutomaticSize.Y, TextColor3 = Color3.fromRGB(120, 170, 230), TextWrapped = true})
+			MakeElement("Stroke", Color3.fromRGB(100, 160, 230), 1),
+			MakeElement("Padding", 10, 10, 10, 10),
+			SetProps(MakeElement("Image", NotificationConfig.Image), {
+				Size = UDim2.new(0, 18, 0, 18),
+				ImageColor3 = Color3.fromRGB(60, 130, 210),
+				Name = "Icon"
+			}),
+			SetProps(MakeElement("Label", NotificationConfig.Name, 14), {
+				Size = UDim2.new(1, -28, 0, 18),
+				Position = UDim2.new(0, 28, 0, 0),
+				Font = Enum.Font.GothamBold,
+				Name = "Title"
+			}),
+			SetProps(MakeElement("Label", NotificationConfig.Content, 13), {
+				Size = UDim2.new(1, 0, 0, 0),
+				Position = UDim2.new(0, 0, 0, 22),
+				Font = Enum.Font.GothamSemibold,
+				Name = "Content",
+				AutomaticSize = Enum.AutomaticSize.Y,
+				TextColor3 = Color3.fromRGB(120, 170, 230),
+				TextWrapped = true
+			})
 		})
 
 		TweenService:Create(NotificationFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint), {Position = UDim2.new(0, 0, 0, 0)}):Play()
 		task.wait(NotificationConfig.Time - 0.88)
+		TweenService:Create(NotificationFrame.Icon, TweenInfo.new(0.4, Enum.EasingStyle.Quint), {ImageTransparency = 1}):Play()
 		TweenService:Create(NotificationFrame, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {BackgroundTransparency = 0.8}):Play()
 		task.wait(0.3)
 		TweenService:Create(NotificationFrame.UIStroke, TweenInfo.new(0.6, Enum.EasingStyle.Quint), {Transparency = 0.9}):Play()
+		TweenService:Create(NotificationFrame.Title, TweenInfo.new(0.6, Enum.EasingStyle.Quint), {TextTransparency = 0.4}):Play()
+		TweenService:Create(NotificationFrame.Content, TweenInfo.new(0.6, Enum.EasingStyle.Quint), {TextTransparency = 0.5}):Play()
 		task.wait(0.05)
 		NotificationFrame:TweenPosition(UDim2.new(1, 20, 0, 0), 'In', 'Quint', 0.8, true)
 		task.wait(1.35)
@@ -449,9 +478,13 @@ function XvPxOL:MakeWindow(WindowConfig)
 	WindowConfig.Name = WindowConfig.Name or "XvPxOL Library"
 	WindowConfig.ConfigFolder = WindowConfig.ConfigFolder or WindowConfig.Name
 	WindowConfig.SaveConfig = WindowConfig.SaveConfig or false
+	WindowConfig.HidePremium = WindowConfig.HidePremium or false
 	if WindowConfig.IntroEnabled == nil then WindowConfig.IntroEnabled = true end
 	WindowConfig.IntroText = WindowConfig.IntroText or "XvPxOL Library"
 	WindowConfig.CloseCallback = WindowConfig.CloseCallback or function() end
+	WindowConfig.ShowIcon = WindowConfig.ShowIcon or false
+	WindowConfig.Icon = WindowConfig.Icon or "rbxassetid://8834748103"
+	WindowConfig.IntroIcon = WindowConfig.IntroIcon or "rbxassetid://8834748103"
 	XvPxOL.Folder = WindowConfig.ConfigFolder
 	XvPxOL.SaveCfg = WindowConfig.SaveConfig
 
@@ -459,24 +492,39 @@ function XvPxOL:MakeWindow(WindowConfig)
 		if not isfolder(WindowConfig.ConfigFolder) then makefolder(WindowConfig.ConfigFolder) end
 	end
 
+	-- Tab列表
 	local TabHolder = AddThemeObject(SetChildren(SetProps(MakeElement("ScrollFrame", Color3.fromRGB(100, 160, 230), 3), {
 		Size = UDim2.new(1, 0, 1, -45)
-	}), {MakeElement("List"), MakeElement("Padding", 6, 0, 0, 6)}), "Divider")
+	}), {
+		MakeElement("List"),
+		MakeElement("Padding", 6, 0, 0, 6)
+	}), "Divider")
 
 	AddConnection(TabHolder.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 		TabHolder.CanvasSize = UDim2.new(0, 0, 0, TabHolder.UIListLayout.AbsoluteContentSize.Y + 16)
 	end)
 
-	local CloseBtn = SetChildren(SetProps(MakeElement("Button"), {Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.5, 0, 0, 0), BackgroundTransparency = 1}), {
-		AddThemeObject(SetProps(MakeElement("Image", "rbxassetid://7072725342"), {Position = UDim2.new(0, 7, 0, 5), Size = UDim2.new(0, 16, 0, 16)}), "Text")
+	-- 关闭按钮
+	local CloseBtn = SetChildren(SetProps(MakeElement("Button"), {
+		Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.5, 0, 0, 0), BackgroundTransparency = 1
+	}), {
+		AddThemeObject(SetProps(MakeElement("Image", "rbxassetid://7072725342"), {
+			Position = UDim2.new(0, 7, 0, 5), Size = UDim2.new(0, 16, 0, 16)
+		}), "Text")
 	})
 
-	local MinimizeBtn = SetChildren(SetProps(MakeElement("Button"), {Size = UDim2.new(0.5, 0, 1, 0), BackgroundTransparency = 1}), {
-		AddThemeObject(SetProps(MakeElement("Image", "rbxassetid://7072719338"), {Position = UDim2.new(0, 7, 0, 5), Size = UDim2.new(0, 16, 0, 16), Name = "Ico"}), "Text")
+	-- 缩小按钮
+	local MinimizeBtn = SetChildren(SetProps(MakeElement("Button"), {
+		Size = UDim2.new(0.5, 0, 1, 0), BackgroundTransparency = 1
+	}), {
+		AddThemeObject(SetProps(MakeElement("Image", "rbxassetid://7072719338"), {
+			Position = UDim2.new(0, 7, 0, 5), Size = UDim2.new(0, 16, 0, 16), Name = "Ico"
+		}), "Text")
 	})
 
 	local DragPoint = SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 40)})
 
+	-- 侧边栏
 	local WindowStuff = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(245, 248, 255), 0, 8), {
 		Size = UDim2.new(0, 135, 1, -45), Position = UDim2.new(0, 0, 0, 45), BackgroundTransparency = 0.15
 	}), {
@@ -491,21 +539,37 @@ function XvPxOL:MakeWindow(WindowConfig)
 				AddThemeObject(SetProps(MakeElement("Image", "rbxassetid://4031889928"), {Size = UDim2.new(1, 0, 1, 0)}), "Second"),
 				MakeElement("Corner", 1)
 			}), "Divider"),
-			AddThemeObject(SetProps(MakeElement("Label", LocalPlayer.DisplayName, 12), {
-				Size = UDim2.new(1, -50, 0, 12), Position = UDim2.new(0, 42, 0, 17), Font = Enum.Font.GothamBold, ClipsDescendants = true
+			SetChildren(SetProps(MakeElement("TFrame"), {AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(0, 8, 0.5, 0)}), {
+				AddThemeObject(MakeElement("Stroke"), "Stroke"), MakeElement("Corner", 1)
+			}),
+			AddThemeObject(SetProps(MakeElement("Label", LocalPlayer.DisplayName, WindowConfig.HidePremium and 13 or 12), {
+				Size = UDim2.new(1, -50, 0, 12), Position = WindowConfig.HidePremium and UDim2.new(0, 42, 0, 17) or UDim2.new(0, 42, 0, 11),
+				Font = Enum.Font.GothamBold, ClipsDescendants = true
 			}), "Text"),
+			AddThemeObject(SetProps(MakeElement("Label", "", 11), {
+				Size = UDim2.new(1, -50, 0, 11), Position = UDim2.new(0, 42, 1, -22), Visible = not WindowConfig.HidePremium
+			}), "TextDark")
 		}),
 	}), "Second")
 
+	-- 窗口标题
 	local WindowName = AddThemeObject(SetProps(MakeElement("Label", WindowConfig.Name, 13), {
 		Size = UDim2.new(1, -25, 2, 0), Position = UDim2.new(0, 20, 0, -20), Font = Enum.Font.GothamBlack, TextSize = 18
 	}), "Text")
 
-	local WindowTopBarLine = AddThemeObject(SetProps(MakeElement("Frame"), {Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1)}), "Stroke")
+	local WindowTopBarLine = AddThemeObject(SetProps(MakeElement("Frame"), {
+		Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1)
+	}), "Stroke")
 
+	-- 主窗口
 	local MainWindow = SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(245, 248, 255), 0, 8), {
-		Parent = Orion, Position = UDim2.new(0.5, -270, 0.5, -150), Size = UDim2.new(0, 540, 0, 300),
-		ClipsDescendants = true, Active = true, Visible = false, BackgroundTransparency = 0.12
+		Parent = XvPxOL_UI,
+		Position = UDim2.new(0.5, -270, 0.5, -150),
+		Size = UDim2.new(0, 540, 0, 300),
+		ClipsDescendants = true,
+		Active = true,
+		Visible = false,
+		BackgroundTransparency = 0.12
 	}), {
 		MakeElement("Stroke", Color3.fromRGB(100, 160, 230), 1.2),
 		SetChildren(SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 40), Name = "TopBar"}), {
@@ -521,13 +585,20 @@ function XvPxOL:MakeWindow(WindowConfig)
 		DragPoint, WindowStuff
 	})
 
-	-- 主窗口彩虹边框
+	-- 添加彩虹边框到主窗口
 	CreateRainbowBorder(MainWindow, 3, 8)
 
-	-- 主窗口拖拽
-	MakeDraggable(MainWindow, DragPoint)
+	if WindowConfig.ShowIcon then
+		WindowName.Position = UDim2.new(0, 42, 0, -20)
+		SetProps(MakeElement("Image", WindowConfig.Icon), {
+			Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(0, 20, 0, 11), Parent = MainWindow.TopBar
+		})
+	end
 
-	-- 悬浮窗点击打开菜单
+	-- 主窗口拖拽
+	MakeDraggable(DragPoint, MainWindow)
+
+	-- 悬浮窗点击事件
 	FloatCircle.MouseButton1Click:Connect(function()
 		UIHidden = not UIHidden
 		MainWindow.Visible = not UIHidden
@@ -535,7 +606,6 @@ function XvPxOL:MakeWindow(WindowConfig)
 
 	-- 关闭按钮
 	CloseBtn.MouseButton1Up:Connect(function()
-		XvPxOL:MakeNotification({Name = "已关闭", Content = "点击悬浮球可重新打开", Time = 3})
 		MainWindow.Visible = false
 		UIHidden = true
 		WindowConfig.CloseCallback()
@@ -543,55 +613,80 @@ function XvPxOL:MakeWindow(WindowConfig)
 
 	-- 缩小按钮
 	MinimizeBtn.MouseButton1Up:Connect(function()
-		MainWindow.Visible = false
-		UIHidden = true
-		XvPxOL:MakeNotification({Name = "已缩小", Content = "点击悬浮球重新打开", Time = 2})
+		if Minimized then
+			TweenService:Create(MainWindow, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, 540, 0, 300)}):Play()
+			MinimizeBtn.Ico.Image = "rbxassetid://7072719338"
+			task.wait(.02)
+			MainWindow.ClipsDescendants = false
+			WindowStuff.Visible = true
+			WindowTopBarLine.Visible = true
+		else
+			MainWindow.ClipsDescendants = true
+			WindowTopBarLine.Visible = false
+			MinimizeBtn.Ico.Image = "rbxassetid://7072720870"
+			TweenService:Create(MainWindow, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, WindowName.TextBounds.X + 120, 0, 40)}):Play()
+			task.wait(0.1)
+			WindowStuff.Visible = false
+		end
+		Minimized = not Minimized
 	end)
 
-	if WindowConfig.IntroEnabled then
+	-- 加载动画
+	local function LoadSequence()
 		MainWindow.Visible = false
-		local LoadSequenceLogo = SetProps(MakeElement("Image", "rbxassetid://8834748103"), {
-			Parent = Orion, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		local LoadSequenceLogo = SetProps(MakeElement("Image", WindowConfig.IntroIcon), {
+			Parent = XvPxOL_UI, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.4, 0),
 			Size = UDim2.new(0, 24, 0, 24), ImageColor3 = Color3.fromRGB(100, 160, 230), ImageTransparency = 1
 		})
 		local LoadSequenceText = SetProps(MakeElement("Label", WindowConfig.IntroText, 13), {
-			Parent = Orion, Size = UDim2.new(1, 0, 1, 0), AnchorPoint = Vector2.new(0.5, 0.5),
+			Parent = XvPxOL_UI, Size = UDim2.new(1, 0, 1, 0), AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(0.5, 16, 0.5, 0), TextXAlignment = Enum.TextXAlignment.Center,
 			Font = Enum.Font.GothamBold, TextTransparency = 1
 		})
-		TweenService:Create(LoadSequenceLogo, TweenInfo.new(.3, Enum.EasingStyle.Quad), {ImageTransparency = 0}):Play()
+		TweenService:Create(LoadSequenceLogo, TweenInfo.new(.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, 0)}):Play()
 		task.wait(0.8)
-		TweenService:Create(LoadSequenceLogo, TweenInfo.new(.3, Enum.EasingStyle.Quad), {Position = UDim2.new(0.5, -(LoadSequenceText.TextBounds.X / 2), 0.5, 0)}):Play()
+		TweenService:Create(LoadSequenceLogo, TweenInfo.new(.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -(LoadSequenceText.TextBounds.X / 2), 0.5, 0)}):Play()
 		task.wait(0.3)
-		TweenService:Create(LoadSequenceText, TweenInfo.new(.3, Enum.EasingStyle.Quad), {TextTransparency = 0}):Play()
+		TweenService:Create(LoadSequenceText, TweenInfo.new(.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
 		task.wait(2)
-		TweenService:Create(LoadSequenceText, TweenInfo.new(.3, Enum.EasingStyle.Quad), {TextTransparency = 1}):Play()
-		LoadSequenceLogo:Destroy(); LoadSequenceText:Destroy()
+		TweenService:Create(LoadSequenceText, TweenInfo.new(.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 1}):Play()
+		LoadSequenceLogo:Destroy()
+		LoadSequenceText:Destroy()
 	end
-```
 
-这是第二部分（Tab系统+所有元素）：
+	if WindowConfig.IntroEnabled then
+		LoadSequence()
+	end
 
-```lua
 	-- ============ Tab系统 ============
 	local TabFunction = {}
 	function TabFunction:MakeTab(TabConfig)
 		TabConfig = TabConfig or {}
 		TabConfig.Name = TabConfig.Name or "Tab"
+		TabConfig.Icon = TabConfig.Icon or ""
+		TabConfig.PremiumOnly = TabConfig.PremiumOnly or false
 
 		local TabFrame = SetChildren(SetProps(MakeElement("Button"), {
-			Size = UDim2.new(1, 0, 0, 28), Parent = TabHolder
+			Size = UDim2.new(1, 0, 0, 26), Parent = TabHolder
 		}), {
+			AddThemeObject(SetProps(MakeElement("Image", TabConfig.Icon), {
+				AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.new(0, 16, 0, 16),
+				Position = UDim2.new(0, 8, 0.5, 0), ImageTransparency = 0.3, Name = "Ico"
+			}), "Text"),
 			AddThemeObject(SetProps(MakeElement("Label", TabConfig.Name, 13), {
-				Size = UDim2.new(1, -16, 1, 0), Position = UDim2.new(0, 8, 0, 0),
+				Size = UDim2.new(1, -30, 1, 0), Position = UDim2.new(0, 30, 0, 0),
 				Font = Enum.Font.GothamSemibold, TextTransparency = 0.3, Name = "Title"
 			}), "Text")
 		})
 
+		if GetIcon(TabConfig.Icon) ~= nil then TabFrame.Ico.Image = GetIcon(TabConfig.Icon) end
+
 		local Container = AddThemeObject(SetChildren(SetProps(MakeElement("ScrollFrame", Color3.fromRGB(100, 160, 230), 4), {
 			Size = UDim2.new(1, -135, 1, -45), Position = UDim2.new(0, 135, 0, 45),
 			Parent = MainWindow, Visible = false, Name = "ItemContainer"
-		}), {MakeElement("List", 0, 5), MakeElement("Padding", 12, 8, 8, 12)}), "Divider")
+		}), {
+			MakeElement("List", 0, 5), MakeElement("Padding", 12, 8, 8, 12)
+		}), "Divider")
 
 		AddConnection(Container.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 			Container.CanvasSize = UDim2.new(0, 0, 0, Container.UIListLayout.AbsoluteContentSize.Y + 24)
@@ -599,6 +694,7 @@ function XvPxOL:MakeWindow(WindowConfig)
 
 		if FirstTab then
 			FirstTab = false
+			TabFrame.Ico.ImageTransparency = 0
 			TabFrame.Title.TextTransparency = 0
 			TabFrame.Title.Font = Enum.Font.GothamBlack
 			Container.Visible = true
@@ -606,15 +702,17 @@ function XvPxOL:MakeWindow(WindowConfig)
 
 		AddConnection(TabFrame.MouseButton1Click, function()
 			for _, Tab in next, TabHolder:GetChildren() do
-				if Tab:IsA("TextButton") and Tab.Title then
+				if Tab:IsA("TextButton") then
 					Tab.Title.Font = Enum.Font.GothamSemibold
-					TweenService:Create(Tab.Title, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {TextTransparency = 0.3}):Play()
+					TweenService:Create(Tab.Ico, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageTransparency = 0.3}):Play()
+					TweenService:Create(Tab.Title, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextTransparency = 0.3}):Play()
 				end
 			end
 			for _, ic in next, MainWindow:GetChildren() do
 				if ic.Name == "ItemContainer" then ic.Visible = false end
 			end
-			TweenService:Create(TabFrame.Title, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {TextTransparency = 0}):Play()
+			TweenService:Create(TabFrame.Ico, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
+			TweenService:Create(TabFrame.Title, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
 			TabFrame.Title.Font = Enum.Font.GothamBlack
 			Container.Visible = true
 		end)
@@ -622,251 +720,328 @@ function XvPxOL:MakeWindow(WindowConfig)
 		local function GetElements(ItemParent)
 			local ElementFunction = {}
 
-			-- Label
 			function ElementFunction:AddLabel(Text)
-				local LabelFrame = SetChildren(SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 24), Parent = ItemParent}), {
+				local LabelFrame = SetChildren(SetProps(MakeElement("TFrame"), {
+					Size = UDim2.new(1, 0, 0, 24), Parent = ItemParent
+				}), {
 					AddThemeObject(SetProps(MakeElement("Label", Text, 14), {
-						Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0, 8, 0, 0), Font = Enum.Font.GothamBold, Name = "Content"
+						Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0, 8, 0, 0),
+						Font = Enum.Font.GothamBold, Name = "Content"
 					}), "Text")
 				})
-				return {Set = function(v) LabelFrame.Content.Text = v end}
+				return {Set = function(ToChange) LabelFrame.Content.Text = ToChange end}
 			end
 
-			-- Paragraph
 			function ElementFunction:AddParagraph(Text, Content)
-				Text = Text or "Text"; Content = Content or "Content"
-				local ParagraphFrame = SetChildren(SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 30), Parent = ItemParent}), {
-					AddThemeObject(SetProps(MakeElement("Label", Text, 13), {Size = UDim2.new(1, -8, 0, 13), Position = UDim2.new(0, 8, 0, 6), Font = Enum.Font.GothamBold, Name = "Title"}), "Text"),
-					AddThemeObject(SetProps(MakeElement("Label", "", 12), {Size = UDim2.new(1, -16, 0, 0), Position = UDim2.new(0, 8, 0, 22), Font = Enum.Font.GothamSemibold, Name = "Content", TextWrapped = true}), "TextDark")
+				Text = Text or "Text"
+				Content = Content or "Content"
+				local ParagraphFrame = SetChildren(SetProps(MakeElement("TFrame"), {
+					Size = UDim2.new(1, 0, 0, 30), Parent = ItemParent
+				}), {
+					AddThemeObject(SetProps(MakeElement("Label", Text, 13), {
+						Size = UDim2.new(1, -8, 0, 13), Position = UDim2.new(0, 8, 0, 6), Font = Enum.Font.GothamBold, Name = "Title"
+					}), "Text"),
+					AddThemeObject(SetProps(MakeElement("Label", "", 12), {
+						Size = UDim2.new(1, -16, 0, 0), Position = UDim2.new(0, 8, 0, 22),
+						Font = Enum.Font.GothamSemibold, Name = "Content", TextWrapped = true
+					}), "TextDark")
 				})
 				AddConnection(ParagraphFrame.Content:GetPropertyChangedSignal("Text"), function()
 					ParagraphFrame.Content.Size = UDim2.new(1, -16, 0, ParagraphFrame.Content.TextBounds.Y)
 					ParagraphFrame.Size = UDim2.new(1, 0, 0, ParagraphFrame.Content.TextBounds.Y + 30)
 				end)
 				ParagraphFrame.Content.Text = Content
-				return {Set = function(v) ParagraphFrame.Content.Text = v end}
+				return {Set = function(ToChange) ParagraphFrame.Content.Text = ToChange end}
 			end
 
-			-- Button(Obsidian风格)
 			function ElementFunction:AddButton(ButtonConfig)
 				ButtonConfig = ButtonConfig or {}
-				local Button = {Text = ButtonConfig.Name or "Button", Func = ButtonConfig.Callback or function() end, Disabled = false, Visible = true, Type = "Button"}
-				local Holder = SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 30), Parent = ItemParent})
-				local Base = SetProps(MakeElement("Button"), {Size = UDim2.new(1, 0, 1, 0)})
-				
+				ButtonConfig.Name = ButtonConfig.Name or "Button"
+				ButtonConfig.Callback = ButtonConfig.Callback or function() end
+				local Button = {}
+				local Click = SetProps(MakeElement("Button"), {Size = UDim2.new(1, 0, 1, 0)})
 				local ButtonFrame = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
-					Size = UDim2.new(1, 0, 0, 30), Parent = Holder, BackgroundTransparency = 0.3
+					Size = UDim2.new(1, 0, 0, 30), Parent = ItemParent, BackgroundTransparency = 0.3
 				}), {
-					AddThemeObject(SetProps(MakeElement("Label", Button.Text, 13), {
-						Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.GothamBold, Name = "Content", TextTransparency = 0.4
+					AddThemeObject(SetProps(MakeElement("Label", ButtonConfig.Name, 13), {
+						Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.GothamBold, Name = "Content"
 					}), "Text"),
-					AddThemeObject(MakeElement("Stroke"), "Stroke"), Base
+					AddThemeObject(MakeElement("Stroke"), "Stroke"), Click
 				}), "Second")
 
-				AddConnection(Base.MouseEnter, function()
-					if Button.Disabled then return end
-					TweenService:Create(ButtonFrame.Content, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {TextTransparency = 0}):Play()
-				end)
-				AddConnection(Base.MouseLeave, function()
-					if Button.Disabled then return end
-					TweenService:Create(ButtonFrame.Content, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {TextTransparency = 0.4}):Play()
-				end)
-				AddConnection(Base.MouseButton1Click, function()
-					if not Button.Disabled then XvPxOL:SafeCallback(Button.Func) end
+				AddConnection(Click.MouseEnter, function()
+					TweenService:Create(ButtonFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+						BackgroundColor3 = Color3.fromRGB(100, 160, 230),
+						BackgroundTransparency = 0.5
+					}):Play()
 				end)
 
-				function Button:SetDisabled(Disabled) Button.Disabled = Disabled; Base.Active = not Disabled end
-				function Button:SetText(Text) Button.Text = Text; ButtonFrame.Content.Text = Text end
-				function Button:SetVisible(Visible) Button.Visible = Visible; Holder.Visible = Visible end
-				function Button:SetCallback(Callback) Button.Func = Callback end
+				AddConnection(Click.MouseLeave, function()
+					TweenService:Create(ButtonFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+						BackgroundColor3 = XvPxOL.Themes[XvPxOL.SelectedTheme].Second,
+						BackgroundTransparency = 0.3
+					}):Play()
+				end)
 
-				Button.Holder = Holder
-				table.insert(XvPxOL.Tabs[#XvPxOL.Tabs] and XvPxOL.Tabs[#XvPxOL.Tabs].Elements or {}, Button)
+				AddConnection(Click.MouseButton1Up, function()
+					spawn(function()
+						Ripple(ButtonFrame)
+						ButtonConfig.Callback()
+					end)
+				end)
+
+				function Button:Set(ButtonText) ButtonFrame.Content.Text = ButtonText end
 				return Button
 			end
 
-			-- Toggle(Obsidian风格开关)
 			function ElementFunction:AddToggle(ToggleConfig)
 				ToggleConfig = ToggleConfig or {}
-				local Toggle = {Text = ToggleConfig.Name or "Toggle", Value = ToggleConfig.Default or false, Disabled = false, Visible = true, Save = ToggleConfig.Save or false, Type = "Toggle"}
-				local color = ToggleConfig.Color or Color3.fromRGB(100, 160, 230)
-				local Base = SetProps(MakeElement("Button"), {Size = UDim2.new(1, 0, 1, 0)})
+				ToggleConfig.Name = ToggleConfig.Name or "Toggle"
+				ToggleConfig.Default = ToggleConfig.Default or false
+				ToggleConfig.Callback = ToggleConfig.Callback or function() end
+				ToggleConfig.Color = ToggleConfig.Color or Color3.fromRGB(100, 160, 230)
+				ToggleConfig.Flag = ToggleConfig.Flag or nil
+				ToggleConfig.Save = ToggleConfig.Save or false
 
-				-- 开关背景
-				local Switch = SetChildren(SetProps(MakeElement("Frame"), {
-					AnchorPoint = Vector2.new(1, 0),
-					BackgroundColor3 = Toggle.Value and color or Color3.fromRGB(180, 190, 210),
-					Position = UDim2.fromScale(1, 0),
-					Size = UDim2.fromOffset(32, 18),
-					BackgroundTransparency = Toggle.Value and 0.25 or 0.45
-				}), {MakeElement("Corner", 1, 0)})
-				
-				New("UIPadding", {PaddingBottom = UDim.new(0, 2), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2), PaddingTop = UDim.new(0, 2), Parent = Switch})
-				
-				local Ball = SetChildren(SetProps(MakeElement("Frame"), {
+				local Toggle = {Value = ToggleConfig.Default, Save = ToggleConfig.Save}
+				local Click = SetProps(MakeElement("Button"), {Size = UDim2.new(1, 0, 1, 0)})
+
+				local ToggleDisable = Create("Frame", {
+					BackgroundColor3 = ToggleConfig.Default and ToggleConfig.Color or Color3.fromRGB(180, 190, 210),
+					BorderSizePixel = 0,
+					Size = UDim2.new(0, 36, 0, 22),
+					Position = UDim2.new(1, -38, 0.5, 0),
+					AnchorPoint = Vector2.new(0, 0.5),
+					BackgroundTransparency = ToggleConfig.Default and 0.25 or 0.45
+				}, {MakeElement("Corner", 0, 6)})
+
+				local ToggleSwitch = Create("Frame", {
 					BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-					Size = UDim2.fromScale(1, 1),
-					SizeConstraint = Enum.SizeConstraint.RelativeYY
-				}), {MakeElement("Corner", 1, 0)})
-				Ball.Parent = Switch
-				
-				local SwitchStroke = SetProps(MakeElement("Stroke", color, 1.2), {Parent = Switch})
+					Size = UDim2.new(0, 18, 0, 18),
+					Position = ToggleConfig.Default and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 2, 0.5, 0),
+					AnchorPoint = Vector2.new(0.5, 0.5)
+				}, {MakeElement("Corner", 0, 5)})
+				ToggleSwitch.Parent = ToggleDisable
 
-				local Holder = SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 34), Parent = ItemParent})
-				
-				local Label = AddThemeObject(SetProps(MakeElement("Label", Toggle.Text, 13), {
-					Size = UDim2.new(1, -44, 1, 0), Position = UDim2.new(0, 0, 0, 0), Font = Enum.Font.GothamBold, Name = "Content", TextTransparency = Toggle.Value and 0 or 0.4
-				}), "Text")
-				Label.Parent = Holder
-				Switch.Parent = Holder
-				Base.Parent = Holder
+				MakeElement("Stroke", ToggleConfig.Color, 1.2).Parent = ToggleDisable
 
-				-- 设置Ball初始位置
-				Ball.AnchorPoint = Vector2.new(Toggle.Value and 1 or 0, 0)
-				Ball.Position = UDim2.fromScale(Toggle.Value and 1 or 0, 0)
+				local ToggleFrame = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
+					Size = UDim2.new(1, 0, 0, 34), Parent = ItemParent, BackgroundTransparency = 0.3
+				}), {
+					AddThemeObject(SetProps(MakeElement("Label", ToggleConfig.Name, 13), {
+						Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.GothamBold, Name = "Content"
+					}), "Text"),
+					AddThemeObject(MakeElement("Stroke"), "Stroke"), ToggleDisable, Click
+				}), "Second")
 
-				local function Display()
-					local offset = Toggle.Value and 1 or 0
-					TweenService:Create(Ball, TweenInfo.new(0.2), {AnchorPoint = Vector2.new(offset, 0), Position = UDim2.fromScale(offset, 0)}):Play()
-					TweenService:Create(Switch, TweenInfo.new(0.2), {
-						BackgroundColor3 = Toggle.Value and color or Color3.fromRGB(180, 190, 210),
+				function Toggle:Set(Value)
+					Toggle.Value = Value
+					TweenService:Create(ToggleDisable, TweenInfo.new(0.2), {
+						BackgroundColor3 = Toggle.Value and ToggleConfig.Color or Color3.fromRGB(180, 190, 210),
 						BackgroundTransparency = Toggle.Value and 0.25 or 0.45
 					}):Play()
-					TweenService:Create(Label, TweenInfo.new(0.2), {TextTransparency = Toggle.Value and 0 or 0.4}):Play()
+					TweenService:Create(ToggleSwitch, TweenInfo.new(0.2), {
+						Position = Toggle.Value and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
+					}):Play()
+					ToggleConfig.Callback(Toggle.Value)
 				end
 
-				function Toggle:SetValue(Value)
-					if Toggle.Disabled then return end
-					Toggle.Value = Value
-					Display()
-					XvPxOL:SafeCallback(ToggleConfig.Callback, Toggle.Value)
+				Toggle:Set(Toggle.Value)
+
+				AddConnection(Click.MouseButton1Up, function()
 					SaveCfg(game.GameId)
-				end
+					Toggle:Set(not Toggle.Value)
+				end)
 
-				AddConnection(Base.MouseButton1Click, function() Toggle:SetValue(not Toggle.Value) end)
-
-				function Toggle:SetDisabled(Disabled) Toggle.Disabled = Disabled; Base.Active = not Disabled end
-				function Toggle:SetText(Text) Toggle.Text = Text; Label.Text = Text end
-				function Toggle:SetVisible(Visible) Toggle.Visible = Visible; Holder.Visible = Visible end
-				function Toggle:OnChanged(Func) ToggleConfig.Callback = Func end
-
-				Toggle.Holder = Holder
 				if ToggleConfig.Flag then XvPxOL.Flags[ToggleConfig.Flag] = Toggle end
 				return Toggle
 			end
 
-			-- Slider(Obsidian风格)
+			-- 滑块（从Rainmiao搬来并改小改色）
 			function ElementFunction:AddSlider(SliderConfig)
 				SliderConfig = SliderConfig or {}
-				local min = SliderConfig.Min or 0; local max = SliderConfig.Max or 100
-				local def = SliderConfig.Default or 50; local inc = SliderConfig.Increment or 1
-				local color = SliderConfig.Color or Color3.fromRGB(100, 160, 230)
-				local Slider = {Value = def, Min = min, Max = max, Rounding = inc > 1 and 0 or 0, Save = SliderConfig.Save or false, Type = "Slider"}
+				SliderConfig.Name = SliderConfig.Name or "Slider"
+				SliderConfig.Min = SliderConfig.Min or 0
+				SliderConfig.Max = SliderConfig.Max or 100
+				SliderConfig.Increment = SliderConfig.Increment or 1
+				SliderConfig.Default = SliderConfig.Default or 50
+				SliderConfig.Callback = SliderConfig.Callback or function() end
+				SliderConfig.ValueName = SliderConfig.ValueName or ""
+				SliderConfig.Color = SliderConfig.Color or Color3.fromRGB(100, 160, 230)
+				SliderConfig.Flag = SliderConfig.Flag or nil
+				SliderConfig.Save = SliderConfig.Save or false
 
-				local Holder = SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, SliderConfig.Name and 52 or 38), Parent = ItemParent})
+				local Slider = {Value = SliderConfig.Default, Save = SliderConfig.Save}
+				local SliderDragging = false
 
-				if SliderConfig.Name then
+				local SliderModule = SetProps(MakeElement("TFrame"), {
+					Size = UDim2.new(1, 0, 0, 38), Parent = ItemParent
+				})
+
+				local SliderBack = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
+					Size = UDim2.new(1, 0, 0, 38), Parent = SliderModule, BackgroundTransparency = 0.3
+				}), {
 					AddThemeObject(SetProps(MakeElement("Label", SliderConfig.Name, 13), {
-						Size = UDim2.new(1, -8, 0, 14), Position = UDim2.new(0, 4, 0, 4), Font = Enum.Font.GothamBold, Name = "Content"
-					}), "Text").Parent = Holder
-				end
+						Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.GothamBold, Name = "Content"
+					}), "Text"),
+					AddThemeObject(MakeElement("Stroke"), "Stroke")
+				}), "Second")
 
-				local Bar = SetChildren(SetProps(MakeElement("TextButton"), {
-					Active = true,
+				local SliderBar = Create("Frame", {
 					BackgroundColor3 = Color3.fromRGB(210, 220, 235),
-					BorderColor3 = color,
-					BorderSizePixel = 1,
-					Position = UDim2.new(0, 4, 0, SliderConfig.Name and 26 or 10),
-					Size = UDim2.new(1, -8, 0, 18),
-					Text = ""
-				}), {MakeElement("Corner", 0, 4)})
-				Bar.Parent = Holder
+					BorderSizePixel = 0,
+					Size = UDim2.new(0, 120, 0, 10),
+					Position = UDim2.new(0, 200, 0.5, 0),
+					AnchorPoint = Vector2.new(0, 0.5),
+					Parent = SliderBack
+				}, {MakeElement("Corner", 0, 4)})
 
-				local Fill = SetChildren(SetProps(MakeElement("Frame"), {
-					BackgroundColor3 = color,
-					Size = UDim2.fromScale((def - min) / (max - min), 1)
-				}), {MakeElement("Corner", 0, 4)})
-				Fill.Parent = Bar
+				local SliderPart = Create("Frame", {
+					BackgroundColor3 = SliderConfig.Color,
+					BorderSizePixel = 0,
+					Size = UDim2.new(0, 50, 0, 10),
+					Parent = SliderBar
+				}, {MakeElement("Corner", 0, 4)})
 
-				-- 数值标签
-				local DisplayLabel = AddThemeObject(SetProps(MakeElement("Label", tostring(def) .. (SliderConfig.ValueName or ""), 12), {
-					Size = UDim2.new(1, -8, 0, 14), Position = UDim2.new(0, 4, 0, 0),
-					Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Right, Name = "Value"
-				}), "TextDark")
-				DisplayLabel.Parent = Bar
+				local SliderValBG = Create("Frame", {
+					BackgroundColor3 = Color3.fromRGB(210, 220, 235),
+					BorderSizePixel = 0,
+					Size = UDim2.new(0, 36, 0, 20),
+					Position = UDim2.new(1, -40, 0.5, 0),
+					AnchorPoint = Vector2.new(1, 0.5),
+					Parent = SliderBack
+				}, {MakeElement("Corner", 0, 5)})
 
-				local dragging = false
+				local SliderValue = Create("TextBox", {
+					Parent = SliderValBG,
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 1, 0),
+					Font = Enum.Font.Gotham,
+					Text = tostring(SliderConfig.Default),
+					TextColor3 = Color3.fromRGB(60, 130, 210),
+					TextSize = 12,
+					ClearTextOnFocus = false
+				})
+
+				local MinSlider = Create("TextButton", {
+					Parent = SliderBack,
+					BackgroundTransparency = 1,
+					Position = UDim2.new(0, 175, 0.5, 0),
+					AnchorPoint = Vector2.new(0, 0.5),
+					Size = UDim2.new(0, 16, 0, 16),
+					Font = Enum.Font.Gotham,
+					Text = "-",
+					TextColor3 = Color3.fromRGB(60, 130, 210),
+					TextSize = 18,
+					TextWrapped = true
+				})
+
+				local AddSlider = Create("TextButton", {
+					Parent = SliderBack,
+					BackgroundTransparency = 1,
+					Position = UDim2.new(0, 325, 0.5, 0),
+					AnchorPoint = Vector2.new(0, 0.5),
+					Size = UDim2.new(0, 16, 0, 16),
+					Font = Enum.Font.Gotham,
+					Text = "+",
+					TextColor3 = Color3.fromRGB(60, 130, 210),
+					TextSize = 18,
+					TextWrapped = true
+				})
+
 				local function updateFromMouse()
-					if not Bar or not Bar.Parent then return end
-					local barPos = Bar.AbsolutePosition.X
-					local barSize = Bar.AbsoluteSize.X
-					local scale = math.clamp((Mouse.X - barPos) / barSize, 0, 1)
-					local value = math.floor(min + (max - min) * scale)
-					if inc > 1 then value = Round(value, inc) end
-					Slider:SetValue(value)
+					if not SliderBar or not SliderBar.Parent then return end
+					local barPos = SliderBar.AbsolutePosition.X
+					local barSize = SliderBar.AbsoluteSize.X
+					local mouseX = Mouse.X
+					local SizeScale = math.clamp((mouseX - barPos) / barSize, 0, 1)
+					local value = SliderConfig.Min + ((SliderConfig.Max - SliderConfig.Min) * SizeScale)
+					if SliderConfig.Increment > 1 then value = Round(value, SliderConfig.Increment) end
+					Slider:Set(value)
 				end
 
-				Bar.InputBegan:Connect(function(Input)
+				SliderBar.InputBegan:Connect(function(Input)
 					if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-						dragging = true; updateFromMouse()
+						SliderDragging = true
+						updateFromMouse()
 					end
-				end)
-				AddConnection(UserInputService.InputEnded, function(Input)
-					if Input.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
-						dragging = false; SaveCfg(game.GameId)
-					end
-				end)
-				AddConnection(UserInputService.InputChanged, function(Input)
-					if dragging and Input.UserInputType == Enum.UserInputType.MouseMovement then updateFromMouse() end
 				end)
 
-				function Slider:SetValue(Value)
-					self.Value = math.clamp(Value, min, max)
-					local scale = (self.Value - min) / (max - min)
-					TweenService:Create(Fill, TweenInfo.new(.1), {Size = UDim2.fromScale(scale, 1)}):Play()
-					DisplayLabel.Text = tostring(self.Value) .. (SliderConfig.ValueName or "")
-					XvPxOL:SafeCallback(SliderConfig.Callback, self.Value)
+				SliderBar.InputEnded:Connect(function(Input)
+					if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+						SliderDragging = false
+						SaveCfg(game.GameId)
+					end
+				end)
+
+				UserInputService.InputChanged:Connect(function(Input)
+					if SliderDragging and Input.UserInputType == Enum.UserInputType.MouseMovement then
+						updateFromMouse()
+					end
+				end)
+
+				MinSlider.MouseButton1Click:Connect(function()
+					local currentValue = Slider.Value
+					currentValue = math.clamp(currentValue - 1, SliderConfig.Min, SliderConfig.Max)
+					Slider:Set(currentValue)
+				end)
+
+				AddSlider.MouseButton1Click:Connect(function()
+					local currentValue = Slider.Value
+					currentValue = math.clamp(currentValue + 1, SliderConfig.Min, SliderConfig.Max)
+					Slider:Set(currentValue)
+				end)
+
+				function Slider:Set(Value)
+					self.Value = math.clamp(Value, SliderConfig.Min, SliderConfig.Max)
+					local scale = (self.Value - SliderConfig.Min) / (SliderConfig.Max - SliderConfig.Min)
+					TweenService:Create(SliderPart, TweenInfo.new(.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						Size = UDim2.new(scale, 0, 1, 0)
+					}):Play()
+					SliderValue.Text = tostring(self.Value) .. SliderConfig.ValueName
+					SliderConfig.Callback(self.Value)
 				end
 
-				function Slider:SetMax(Value) self.Max = Value; self:SetValue(math.clamp(self.Value, min, Value)) end
-				function Slider:SetMin(Value) self.Min = Value; self:SetValue(math.clamp(self.Value, Value, max)) end
-				function Slider:SetVisible(Visible) Holder.Visible = Visible end
-				function Slider:OnChanged(Func) SliderConfig.Callback = Func end
-
-				Slider:SetValue(Slider.Value)
-				Slider.Holder = Holder
+				Slider:Set(Slider.Value)
 				if SliderConfig.Flag then XvPxOL.Flags[SliderConfig.Flag] = Slider end
 				return Slider
 			end
 
-			-- Dropdown(Obsidian风格)
 			function ElementFunction:AddDropdown(DropdownConfig)
 				DropdownConfig = DropdownConfig or {}
-				local opts = DropdownConfig.Options or {}
-				local Dropdown = {Value = DropdownConfig.Default or "", Options = opts, Buttons = {}, Toggled = false, Type = "Dropdown", Save = DropdownConfig.Save or false}
-				local MaxElements = 4
-				if not table.find(opts, Dropdown.Value) then Dropdown.Value = "..." end
+				DropdownConfig.Name = DropdownConfig.Name or "Dropdown"
+				DropdownConfig.Options = DropdownConfig.Options or {}
+				DropdownConfig.Default = DropdownConfig.Default or ""
+				DropdownConfig.Callback = DropdownConfig.Callback or function() end
+				DropdownConfig.Flag = DropdownConfig.Flag or nil
+				DropdownConfig.Save = DropdownConfig.Save or false
 
-				local Holder = SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 32), Parent = ItemParent, ClipsDescendants = true})
+				local Dropdown = {Value = DropdownConfig.Default, Options = DropdownConfig.Options, Buttons = {}, Toggled = false, Type = "Dropdown", Save = DropdownConfig.Save}
+				local MaxElements = 4
+				if not table.find(Dropdown.Options, Dropdown.Value) then Dropdown.Value = "..." end
 
 				local DropdownList = MakeElement("List")
 				local DropdownContainer = AddThemeObject(SetProps(SetChildren(MakeElement("ScrollFrame", Color3.fromRGB(100, 160, 230), 3), {DropdownList}), {
-					Parent = Holder, Position = UDim2.new(0, 0, 0, 32), Size = UDim2.new(1, 0, 1, -32), ClipsDescendants = true
+					Parent = ItemParent, Position = UDim2.new(0, 0, 0, 32), Size = UDim2.new(1, 0, 1, -32), ClipsDescendants = true
 				}), "Divider")
 
 				local Click = SetProps(MakeElement("Button"), {Size = UDim2.new(1, 0, 1, 0)})
+
 				local DropdownFrame = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
-					Size = UDim2.new(1, 0, 0, 32), Parent = Holder, BackgroundTransparency = 0.3
+					Size = UDim2.new(1, 0, 0, 32), Parent = ItemParent, ClipsDescendants = true, BackgroundTransparency = 0.3
 				}), {
 					DropdownContainer,
 					SetProps(SetChildren(MakeElement("TFrame"), {
-						AddThemeObject(SetProps(MakeElement("Label", DropdownConfig.Name or "Dropdown", 13), {
+						AddThemeObject(SetProps(MakeElement("Label", DropdownConfig.Name, 13), {
 							Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.GothamBold, Name = "Content"
 						}), "Text"),
 						AddThemeObject(SetProps(MakeElement("Label", "...", 12), {
 							Size = UDim2.new(1, -35, 1, 0), Font = Enum.Font.Gotham, Name = "Selected", TextXAlignment = Enum.TextXAlignment.Right
 						}), "TextDark"),
-						AddThemeObject(SetProps(MakeElement("Frame"), {Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1), Name = "Line", Visible = false}), "Stroke"),
+						AddThemeObject(SetProps(MakeElement("Frame"), {
+							Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1), Name = "Line", Visible = false
+						}), "Stroke"),
 						Click
 					}), {Size = UDim2.new(1, 0, 0, 32), ClipsDescendants = true, Name = "F"}),
 					AddThemeObject(MakeElement("Stroke"), "Stroke"), MakeElement("Corner")
@@ -878,138 +1053,189 @@ function XvPxOL:MakeWindow(WindowConfig)
 
 				local function AddOptions(Options)
 					for _, Option in pairs(Options) do
-						local btn = AddThemeObject(SetProps(SetChildren(MakeElement("Button"), {
+						local OptionBtn = AddThemeObject(SetProps(SetChildren(MakeElement("Button"), {
 							MakeElement("Corner", 0, 5),
 							AddThemeObject(SetProps(MakeElement("Label", Option, 12, 0.35), {
 								Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -8, 1, 0), Name = "Title"
 							}), "Text")
-						}), {Parent = DropdownContainer, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, ClipsDescendants = true}), "Divider")
-						AddConnection(btn.MouseButton1Click, function() Dropdown:Set(Option); SaveCfg(game.GameId) end)
-						Dropdown.Buttons[Option] = btn
+						}), {
+							Parent = DropdownContainer, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, ClipsDescendants = true
+						}), "Divider")
+
+						AddConnection(OptionBtn.MouseButton1Click, function()
+							Dropdown:Set(Option)
+							SaveCfg(game.GameId)
+						end)
+						Dropdown.Buttons[Option] = OptionBtn
 					end
 				end
 
 				function Dropdown:Refresh(Options, Delete)
-					if Delete then for _, v in pairs(Dropdown.Buttons) do v:Destroy() end; table.clear(Dropdown.Options); table.clear(Dropdown.Buttons) end
-					Dropdown.Options = Options; AddOptions(Dropdown.Options)
+					if Delete then
+						for _, v in pairs(Dropdown.Buttons) do v:Destroy() end
+						table.clear(Dropdown.Options)
+						table.clear(Dropdown.Buttons)
+					end
+					Dropdown.Options = Options
+					AddOptions(Dropdown.Options)
 				end
 
 				function Dropdown:Set(Value)
 					if not table.find(Dropdown.Options, Value) then
-						Dropdown.Value = "..."; DropdownFrame.F.Selected.Text = Dropdown.Value
+						Dropdown.Value = "..."
+						DropdownFrame.F.Selected.Text = Dropdown.Value
 						for _, v in pairs(Dropdown.Buttons) do
-							TweenService:Create(v, TweenInfo.new(.15), {BackgroundTransparency = 1}):Play()
-							TweenService:Create(v.Title, TweenInfo.new(.15), {TextTransparency = 0.35}):Play()
+							TweenService:Create(v, TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+							TweenService:Create(v.Title, TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0.35}):Play()
 						end
 						return
 					end
-					Dropdown.Value = Value; DropdownFrame.F.Selected.Text = Value
+					Dropdown.Value = Value
+					DropdownFrame.F.Selected.Text = Dropdown.Value
 					for _, v in pairs(Dropdown.Buttons) do
-						TweenService:Create(v, TweenInfo.new(.15), {BackgroundTransparency = 1}):Play()
-						TweenService:Create(v.Title, TweenInfo.new(.15), {TextTransparency = 0.35}):Play()
+						TweenService:Create(v, TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+						TweenService:Create(v.Title, TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0.35}):Play()
 					end
-					TweenService:Create(Dropdown.Buttons[Value], TweenInfo.new(.15), {BackgroundTransparency = 0.15}):Play()
-					TweenService:Create(Dropdown.Buttons[Value].Title, TweenInfo.new(.15), {TextTransparency = 0}):Play()
-					XvPxOL:SafeCallback(DropdownConfig.Callback, Value)
+					TweenService:Create(Dropdown.Buttons[Value], TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15}):Play()
+					TweenService:Create(Dropdown.Buttons[Value].Title, TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+					return DropdownConfig.Callback(Dropdown.Value)
 				end
 
 				AddConnection(Click.MouseButton1Click, function()
 					Dropdown.Toggled = not Dropdown.Toggled
 					DropdownFrame.F.Line.Visible = Dropdown.Toggled
-					local h = #Dropdown.Options > MaxElements and 32 + (MaxElements * 24) or DropdownList.AbsoluteContentSize.Y + 32
-					TweenService:Create(DropdownFrame, TweenInfo.new(.15), {Size = Dropdown.Toggled and UDim2.new(1, 0, 0, h) or UDim2.new(1, 0, 0, 32)}):Play()
-					Holder.Size = UDim2.new(1, 0, 0, Dropdown.Toggled and h or 32)
+					if #Dropdown.Options > MaxElements then
+						TweenService:Create(DropdownFrame, TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = Dropdown.Toggled and UDim2.new(1, 0, 0, 32 + (MaxElements * 24)) or UDim2.new(1, 0, 0, 32)}):Play()
+					else
+						TweenService:Create(DropdownFrame, TweenInfo.new(.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = Dropdown.Toggled and UDim2.new(1, 0, 0, DropdownList.AbsoluteContentSize.Y + 32) or UDim2.new(1, 0, 0, 32)}):Play()
+					end
 				end)
 
-				Dropdown:Refresh(opts, false); Dropdown:Set(Dropdown.Value)
+				Dropdown:Refresh(Dropdown.Options, false)
+				Dropdown:Set(Dropdown.Value)
 				if DropdownConfig.Flag then XvPxOL.Flags[DropdownConfig.Flag] = Dropdown end
-				Dropdown.Holder = Holder
 				return Dropdown
 			end
 
-			-- Bind
 			function ElementFunction:AddBind(BindConfig)
 				BindConfig = BindConfig or {}
-				local Bind = {Value = BindConfig.Default or Enum.KeyCode.Unknown, Binding = false, Type = "Bind", Save = BindConfig.Save or false}
+				BindConfig.Name = BindConfig.Name or "Bind"
+				BindConfig.Default = BindConfig.Default or Enum.KeyCode.Unknown
+				BindConfig.Hold = BindConfig.Hold or false
+				BindConfig.Callback = BindConfig.Callback or function() end
+				BindConfig.Flag = BindConfig.Flag or nil
+				BindConfig.Save = BindConfig.Save or false
+
+				local Bind = {Value = BindConfig.Default, Binding = false, Type = "Bind", Save = BindConfig.Save}
 				local Holding = false
 				local Click = SetProps(MakeElement("Button"), {Size = UDim2.new(1, 0, 1, 0)})
 
 				local BindBox = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 4), {
-					Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -10, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), BackgroundTransparency = 0.35
+					Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -10, 0.5, 0),
+					AnchorPoint = Vector2.new(1, 0.5), BackgroundTransparency = 0.35
 				}), {
 					AddThemeObject(MakeElement("Stroke"), "Stroke"),
-					AddThemeObject(SetProps(MakeElement("Label", "...", 12), {Size = UDim2.new(1, 0, 1, 0), Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Center, Name = "Value"}), "Text")
+					AddThemeObject(SetProps(MakeElement("Label", "...", 12), {
+						Size = UDim2.new(1, 0, 1, 0), Font = Enum.Font.GothamBold,
+						TextXAlignment = Enum.TextXAlignment.Center, Name = "Value"
+					}), "Text")
 				}), "Main")
 
-				local Holder = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
+				local BindFrame = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
 					Size = UDim2.new(1, 0, 0, 34), Parent = ItemParent, BackgroundTransparency = 0.3
 				}), {
-					AddThemeObject(SetProps(MakeElement("Label", BindConfig.Name or "Bind", 13), {
+					AddThemeObject(SetProps(MakeElement("Label", BindConfig.Name, 13), {
 						Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.GothamBold, Name = "Content"
 					}), "Text"),
 					AddThemeObject(MakeElement("Stroke"), "Stroke"), BindBox, Click
 				}), "Second")
 
+				AddConnection(BindBox.Value:GetPropertyChangedSignal("Text"), function()
+					TweenService:Create(BindBox, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, BindBox.Value.TextBounds.X + 14, 0, 20)}):Play()
+				end)
+
 				AddConnection(Click.InputEnded, function(Input)
 					if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-						if Bind.Binding then return end; Bind.Binding = true; BindBox.Value.Text = "..."
+						if Bind.Binding then return end
+						Bind.Binding = true
+						BindBox.Value.Text = "..."
 					end
 				end)
 
 				AddConnection(UserInputService.InputBegan, function(Input)
 					if UserInputService:GetFocusedTextBox() then return end
 					if (Input.KeyCode.Name == Bind.Value or Input.UserInputType.Name == Bind.Value) and not Bind.Binding then
-						if BindConfig.Hold then Holding = true; XvPxOL:SafeCallback(BindConfig.Callback, Holding)
-						else XvPxOL:SafeCallback(BindConfig.Callback) end
+						if BindConfig.Hold then Holding = true; BindConfig.Callback(Holding) else BindConfig.Callback() end
 					elseif Bind.Binding then
 						local Key
 						pcall(function() if not CheckKey(BlacklistedKeys, Input.KeyCode) then Key = Input.KeyCode end end)
 						pcall(function() if CheckKey(WhitelistedMouse, Input.UserInputType) and not Key then Key = Input.UserInputType end end)
-						Key = Key or Bind.Value; Bind.Binding = false; Bind.Value = Key; Bind.Value = Bind.Value.Name or Bind.Value
-						BindBox.Value.Text = Bind.Value; SaveCfg(game.GameId)
+						Key = Key or Bind.Value
+						Bind:Set(Key)
+						SaveCfg(game.GameId)
 					end
 				end)
 
 				AddConnection(UserInputService.InputEnded, function(Input)
 					if Input.KeyCode.Name == Bind.Value or Input.UserInputType.Name == Bind.Value then
-						if BindConfig.Hold and Holding then Holding = false; XvPxOL:SafeCallback(BindConfig.Callback, Holding) end
+						if BindConfig.Hold and Holding then Holding = false; BindConfig.Callback(Holding) end
 					end
 				end)
 
-				BindBox.Value.Text = Bind.Value.Name or Bind.Value
+				function Bind:Set(Key)
+					Bind.Binding = false
+					Bind.Value = Key or Bind.Value
+					Bind.Value = Bind.Value.Name or Bind.Value
+					BindBox.Value.Text = Bind.Value
+				end
+
+				Bind:Set(BindConfig.Default)
 				if BindConfig.Flag then XvPxOL.Flags[BindConfig.Flag] = Bind end
-				Bind.Holder = Holder
 				return Bind
 			end
 
-			-- Textbox
 			function ElementFunction:AddTextbox(TextboxConfig)
 				TextboxConfig = TextboxConfig or {}
+				TextboxConfig.Name = TextboxConfig.Name or "Textbox"
+				TextboxConfig.Default = TextboxConfig.Default or ""
+				TextboxConfig.TextDisappear = TextboxConfig.TextDisappear or false
+				TextboxConfig.Callback = TextboxConfig.Callback or function() end
+
 				local Click = SetProps(MakeElement("Button"), {Size = UDim2.new(1, 0, 1, 0)})
 				local TextboxActual = AddThemeObject(Create("TextBox", {
-					Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(60, 130, 210),
-					PlaceholderColor3 = Color3.fromRGB(120, 170, 230), PlaceholderText = "输入...",
-					Font = Enum.Font.GothamSemibold, TextXAlignment = Enum.TextXAlignment.Center, TextSize = 12, ClearTextOnFocus = false
+					Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+					TextColor3 = Color3.fromRGB(60, 130, 210), PlaceholderColor3 = Color3.fromRGB(120, 170, 230),
+					PlaceholderText = "输入...", Font = Enum.Font.GothamSemibold,
+					TextXAlignment = Enum.TextXAlignment.Center, TextSize = 12, ClearTextOnFocus = false
 				}), "Text")
 
 				local TextContainer = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 4), {
-					Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -10, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), BackgroundTransparency = 0.35
-				}), {AddThemeObject(MakeElement("Stroke"), "Stroke"), TextboxActual}), "Main")
+					Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -10, 0.5, 0),
+					AnchorPoint = Vector2.new(1, 0.5), BackgroundTransparency = 0.35
+				}), {
+					AddThemeObject(MakeElement("Stroke"), "Stroke"), TextboxActual
+				}), "Main")
 
-				local Holder = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
+				local TextboxFrame = AddThemeObject(SetChildren(SetProps(MakeElement("RoundFrame", Color3.fromRGB(225, 235, 255), 0, 5), {
 					Size = UDim2.new(1, 0, 0, 34), Parent = ItemParent, BackgroundTransparency = 0.3
 				}), {
-					AddThemeObject(SetProps(MakeElement("Label", TextboxConfig.Name or "Textbox", 13), {
+					AddThemeObject(SetProps(MakeElement("Label", TextboxConfig.Name, 13), {
 						Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.GothamBold, Name = "Content"
 					}), "Text"),
 					AddThemeObject(MakeElement("Stroke"), "Stroke"), TextContainer, Click
 				}), "Second")
 
+				AddConnection(TextboxActual:GetPropertyChangedSignal("Text"), function()
+					TweenService:Create(TextContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, TextboxActual.TextBounds.X + 14, 0, 20)}):Play()
+				end)
+
 				AddConnection(TextboxActual.FocusLost, function()
-					XvPxOL:SafeCallback(TextboxConfig.Callback, TextboxActual.Text)
+					TextboxConfig.Callback(TextboxActual.Text)
 					if TextboxConfig.TextDisappear then TextboxActual.Text = "" end
 				end)
-				TextboxActual.Text = TextboxConfig.Default or ""
+
+				TextboxActual.Text = TextboxConfig.Default
+
 				AddConnection(Click.MouseButton1Up, function() TextboxActual:CaptureFocus() end)
 			end
 
@@ -1017,13 +1243,18 @@ function XvPxOL:MakeWindow(WindowConfig)
 		end
 
 		local ElementFunction = {}
+
 		function ElementFunction:AddSection(SectionConfig)
-			local SectionFrame = SetChildren(SetProps(MakeElement("TFrame"), {Size = UDim2.new(1, 0, 0, 22), Parent = Container}), {
-				AddThemeObject(SetProps(MakeElement("Label", SectionConfig.Name or "Section", 12), {
+			SectionConfig.Name = SectionConfig.Name or "Section"
+			local SectionFrame = SetChildren(SetProps(MakeElement("TFrame"), {
+				Size = UDim2.new(1, 0, 0, 22), Parent = Container
+			}), {
+				AddThemeObject(SetProps(MakeElement("Label", SectionConfig.Name, 12), {
 					Size = UDim2.new(1, -8, 0, 14), Position = UDim2.new(0, 0, 0, 2), Font = Enum.Font.GothamSemibold
 				}), "TextDark"),
 				SetChildren(SetProps(MakeElement("TFrame"), {
-					AnchorPoint = Vector2.new(0, 0), Size = UDim2.new(1, 0, 1, -20), Position = UDim2.new(0, 0, 0, 20), Name = "Holder"
+					AnchorPoint = Vector2.new(0, 0), Size = UDim2.new(1, 0, 1, -20),
+					Position = UDim2.new(0, 0, 0, 20), Name = "Holder"
 				}), {MakeElement("List", 0, 5)}),
 			})
 			AddConnection(SectionFrame.Holder.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
@@ -1034,25 +1265,20 @@ function XvPxOL:MakeWindow(WindowConfig)
 			for i, v in next, GetElements(SectionFrame.Holder) do SectionFunction[i] = v end
 			return SectionFunction
 		end
+
 		for i, v in next, GetElements(Container) do ElementFunction[i] = v end
+
+		if TabConfig.PremiumOnly then
+			for i, v in next, ElementFunction do ElementFunction[i] = function() end end
+		end
 		return ElementFunction
 	end
 
-	table.insert(XvPxOL.Tabs, TabFunction)
 	return TabFunction
 end
 
 function XvPxOL:Destroy()
-	self:StopRainbowEffect()
-	Orion:Destroy()
-end
-
-function XvPxOL:Unload()
-	self:StopRainbowEffect()
-	for _, c in ipairs(self.Signals) do c:Disconnect() end
-	self.Signals = {}
-	self.Unloaded = true
-	Orion:Destroy()
+	XvPxOL_UI:Destroy()
 end
 
 return XvPxOL
