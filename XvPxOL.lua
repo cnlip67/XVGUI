@@ -121,6 +121,52 @@ local function MakeDraggable(guiObject, mainFrame)
 	end)
 end
 
+local function MakeSmoothDraggable(guiObject, mainFrame)
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+	local lastUpdate = 0
+	local lastMousePos = nil
+	local velocity = Vector2.new(0, 0)
+
+	guiObject.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = mainFrame.Position
+			lastUpdate = tick()
+			lastMousePos = input.Position
+			velocity = Vector2.new(0, 0)
+		end
+	end)
+
+	guiObject.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+			lastMousePos = nil
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local currentTime = tick()
+			local delta = input.Position - dragStart
+			mainFrame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+			if lastMousePos then
+				local dt = math.max(currentTime - lastUpdate, 0.001)
+				velocity = (input.Position - lastMousePos) / dt
+			end
+			lastUpdate = currentTime
+			lastMousePos = input.Position
+		end
+	end)
+end
+
 local function Create(Name, Properties, Children)
 	local Object = Instance.new(Name)
 	for i, v in next, Properties or {} do Object[i] = v end
@@ -167,20 +213,12 @@ local function AddThemeObject(Object, Type)
 	return Object
 end
 
-local function PackColor(Color)
-	return {R = Color.R * 255, G = Color.G * 255, B = Color.B * 255}
-end
-
-local function UnpackColor(Color)
-	return Color3.fromRGB(Color.R, Color.G, Color.B)
-end
-
 local function SaveCfg(Name)
 	local Data = {}
 	for i, v in pairs(XvPxOL.Flags) do
 		if v.Save then
 			if v.Type == "Colorpicker" then
-				Data[i] = PackColor(v.Value)
+				Data[i] = {R = v.Value.R * 255, G = v.Value.G * 255, B = v.Value.B * 255}
 			else
 				Data[i] = v.Value
 			end
@@ -206,6 +244,7 @@ local function CreateRainbowBorder(parent, thickness, cornerRadius)
 	border.ZIndex = parent.ZIndex - 1
 	border.Name = "RainbowBorder"
 	border.Parent = parent
+	border.Active = false
 	
 	local gradient = Instance.new("UIGradient")
 	gradient.Color = ColorSequence.new({
@@ -239,7 +278,7 @@ local function CreateRainbowBorder(parent, thickness, cornerRadius)
 	
 	spawn(function()
 		while border and border.Parent do
-			gradient.Rotation = (gradient.Rotation + 0.5) % 360
+			gradient.Rotation = (gradient.Rotation + 1) % 360
 			RunService.RenderStepped:Wait()
 		end
 	end)
@@ -315,56 +354,72 @@ CreateElement("Image", function(ImageID) local img = Create("ImageLabel", {Image
 CreateElement("Label", function(Text, TextSize, Transparency) return Create("TextLabel", {Text = Text or "", TextColor3 = Color3.fromRGB(60,130,210), TextTransparency = Transparency or 0, TextSize = TextSize or 14, Font = Enum.Font.Gotham, RichText = true, BackgroundTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left}) end)
 
 local FloatContainer = Instance.new("Frame")
-FloatContainer.Size = UDim2.new(0, 68, 0, 68)
-FloatContainer.Position = UDim2.new(0, 20, 0.5, -34)
+FloatContainer.Size = UDim2.new(0, 72, 0, 72)
+FloatContainer.Position = UDim2.new(0, 20, 0.5, -36)
 FloatContainer.BackgroundTransparency = 1
 FloatContainer.Name = "FloatContainer"
+FloatContainer.ZIndex = 100
 FloatContainer.Parent = XvPxOL_UI
 
-local FloatBorder = Instance.new("Frame")
-FloatBorder.BackgroundTransparency = 1
-FloatBorder.Size = UDim2.new(1, 0, 1, 0)
-FloatBorder.Name = "FloatBorder"
-FloatBorder.Parent = FloatContainer
+local FloatRainbow = Instance.new("Frame")
+FloatRainbow.BackgroundTransparency = 1
+FloatRainbow.Size = UDim2.new(1, 8, 1, 8)
+FloatRainbow.Position = UDim2.new(0, -4, 0, -4)
+FloatRainbow.ZIndex = 98
+FloatRainbow.Active = false
+FloatRainbow.Name = "FloatRainbow"
+FloatRainbow.Parent = FloatContainer
 
 local FloatGradient = Instance.new("UIGradient")
 FloatGradient.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
-	ColorSequenceKeypoint.new(0.10, Color3.fromRGB(255, 127, 0)),
-	ColorSequenceKeypoint.new(0.20, Color3.fromRGB(255, 255, 0)),
-	ColorSequenceKeypoint.new(0.30, Color3.fromRGB(0, 255, 0)),
-	ColorSequenceKeypoint.new(0.40, Color3.fromRGB(0, 255, 255)),
-	ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 0, 255)),
-	ColorSequenceKeypoint.new(0.60, Color3.fromRGB(139, 0, 255)),
-	ColorSequenceKeypoint.new(0.70, Color3.fromRGB(255, 0, 0)),
-	ColorSequenceKeypoint.new(0.80, Color3.fromRGB(255, 127, 0)),
-	ColorSequenceKeypoint.new(0.90, Color3.fromRGB(255, 255, 0)),
-	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(0, 255, 0))
+	ColorSequenceKeypoint.new(0.05, Color3.fromRGB(255, 50, 0)),
+	ColorSequenceKeypoint.new(0.10, Color3.fromRGB(255, 100, 0)),
+	ColorSequenceKeypoint.new(0.15, Color3.fromRGB(255, 150, 0)),
+	ColorSequenceKeypoint.new(0.20, Color3.fromRGB(255, 200, 0)),
+	ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 255, 0)),
+	ColorSequenceKeypoint.new(0.30, Color3.fromRGB(200, 255, 0)),
+	ColorSequenceKeypoint.new(0.35, Color3.fromRGB(100, 255, 0)),
+	ColorSequenceKeypoint.new(0.40, Color3.fromRGB(0, 255, 0)),
+	ColorSequenceKeypoint.new(0.45, Color3.fromRGB(0, 255, 100)),
+	ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 255, 200)),
+	ColorSequenceKeypoint.new(0.55, Color3.fromRGB(0, 200, 255)),
+	ColorSequenceKeypoint.new(0.60, Color3.fromRGB(0, 100, 255)),
+	ColorSequenceKeypoint.new(0.65, Color3.fromRGB(0, 0, 255)),
+	ColorSequenceKeypoint.new(0.70, Color3.fromRGB(75, 0, 200)),
+	ColorSequenceKeypoint.new(0.75, Color3.fromRGB(139, 0, 255)),
+	ColorSequenceKeypoint.new(0.80, Color3.fromRGB(200, 0, 200)),
+	ColorSequenceKeypoint.new(0.85, Color3.fromRGB(255, 0, 150)),
+	ColorSequenceKeypoint.new(0.90, Color3.fromRGB(255, 0, 50)),
+	ColorSequenceKeypoint.new(0.95, Color3.fromRGB(255, 50, 0)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 0))
 })
-FloatGradient.Rotation = 45
-FloatGradient.Parent = FloatBorder
+FloatGradient.Rotation = 0
+FloatGradient.Parent = FloatRainbow
+Instance.new("UICorner", FloatRainbow).CornerRadius = UDim.new(1, 0)
 
 local FloatInner = Instance.new("Frame")
 FloatInner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-FloatInner.BackgroundTransparency = 0.15
-FloatInner.Size = UDim2.new(1, -6, 1, -6)
-FloatInner.Position = UDim2.new(0, 3, 0, 3)
-FloatInner.Parent = FloatBorder
-
-Instance.new("UICorner", FloatBorder).CornerRadius = UDim.new(1, 0)
+FloatInner.BackgroundTransparency = 0.1
+FloatInner.Size = UDim2.new(1, -8, 1, -8)
+FloatInner.Position = UDim2.new(0, 4, 0, 4)
+FloatInner.ZIndex = 99
+FloatInner.Parent = FloatRainbow
 Instance.new("UICorner", FloatInner).CornerRadius = UDim.new(1, 0)
 
 local FloatCircle = Instance.new("ImageButton")
 FloatCircle.Name = "FloatCircle"
-FloatCircle.Size = UDim2.new(1, -12, 1, -12)
-FloatCircle.Position = UDim2.new(0, 6, 0, 6)
+FloatCircle.Size = UDim2.new(1, -16, 1, -16)
+FloatCircle.Position = UDim2.new(0, 8, 0, 8)
 FloatCircle.BackgroundTransparency = 1
 FloatCircle.Image = "rbxassetid://139415924216817"
-FloatCircle.Parent = FloatBorder
+FloatCircle.ZIndex = 101
+FloatCircle.AutoButtonColor = false
+FloatCircle.Parent = FloatRainbow
 Instance.new("UICorner", FloatCircle).CornerRadius = UDim.new(1, 0)
 
 spawn(function()
-	while FloatBorder and FloatBorder.Parent do
+	while FloatRainbow and FloatRainbow.Parent do
 		FloatGradient.Rotation = (FloatGradient.Rotation + 1) % 360
 		RunService.RenderStepped:Wait()
 	end
@@ -640,7 +695,7 @@ function XvPxOL:MakeWindow(WindowConfig)
 		local TabFrame = SetChildren(SetProps(MakeElement("Button"), {
 			Size = UDim2.new(1, 0, 0, 26), Parent = TabHolder
 		}), {
-			AddThemeObject(SetProps(MakeElement("Image", TabConfig.Icon), {
+			AddThemeObject(SetProps(MakeElement("Image"), TabConfig.Icon), {
 				AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.new(0, 16, 0, 16),
 				Position = UDim2.new(0, 8, 0.5, 0), ImageTransparency = 0.3, Name = "Ico"
 			}), "Text"),
@@ -788,8 +843,8 @@ function XvPxOL:MakeWindow(WindowConfig)
 
 				local ToggleSwitch = Create("Frame", {
 					BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-					Size = UDim2.new(0, 18, 0, 18),
-					Position = ToggleConfig.Default and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 2, 0.5, 0),
+					Size = UDim2.new(0, 16, 0, 16),
+					Position = ToggleConfig.Default and UDim2.new(1, -18, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
 					AnchorPoint = Vector2.new(0.5, 0.5)
 				}, {MakeElement("Corner", 0, 5)})
 				ToggleSwitch.Parent = ToggleDisable
@@ -812,7 +867,7 @@ function XvPxOL:MakeWindow(WindowConfig)
 						BackgroundTransparency = Toggle.Value and 0.25 or 0.45
 					}):Play()
 					TweenService:Create(ToggleSwitch, TweenInfo.new(0.2), {
-						Position = Toggle.Value and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
+						Position = Toggle.Value and UDim2.new(1, -18, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
 					}):Play()
 					ToggleConfig.Callback(Toggle.Value)
 				end
@@ -857,11 +912,24 @@ function XvPxOL:MakeWindow(WindowConfig)
 					AddThemeObject(MakeElement("Stroke"), "Stroke")
 				}), "Second")
 
+				local MinSlider = Create("TextButton", {
+					Parent = SliderBack,
+					BackgroundTransparency = 1,
+					Position = UDim2.new(0, 178, 0.5, 0),
+					AnchorPoint = Vector2.new(0, 0.5),
+					Size = UDim2.new(0, 16, 0, 16),
+					Font = Enum.Font.Gotham,
+					Text = "-",
+					TextColor3 = Color3.fromRGB(60, 130, 210),
+					TextSize = 18,
+					TextWrapped = true
+				})
+
 				local SliderBar = Create("Frame", {
 					BackgroundColor3 = Color3.fromRGB(210, 220, 235),
 					BorderSizePixel = 0,
-					Size = UDim2.new(0, 120, 0, 10),
-					Position = UDim2.new(0, 200, 0.5, 0),
+					Size = UDim2.new(0, 100, 0, 10),
+					Position = UDim2.new(0, 198, 0.5, 0),
 					AnchorPoint = Vector2.new(0, 0.5),
 					Parent = SliderBack
 				}, {MakeElement("Corner", 0, 4)})
@@ -873,11 +941,24 @@ function XvPxOL:MakeWindow(WindowConfig)
 					Parent = SliderBar
 				}, {MakeElement("Corner", 0, 4)})
 
+				local AddSlider = Create("TextButton", {
+					Parent = SliderBack,
+					BackgroundTransparency = 1,
+					Position = UDim2.new(0, 302, 0.5, 0),
+					AnchorPoint = Vector2.new(0, 0.5),
+					Size = UDim2.new(0, 16, 0, 16),
+					Font = Enum.Font.Gotham,
+					Text = "+",
+					TextColor3 = Color3.fromRGB(60, 130, 210),
+					TextSize = 18,
+					TextWrapped = true
+				})
+
 				local SliderValBG = Create("Frame", {
 					BackgroundColor3 = Color3.fromRGB(210, 220, 235),
 					BorderSizePixel = 0,
-					Size = UDim2.new(0, 36, 0, 20),
-					Position = UDim2.new(1, -40, 0.5, 0),
+					Size = UDim2.new(0, 40, 0, 20),
+					Position = UDim2.new(1, -44, 0.5, 0),
 					AnchorPoint = Vector2.new(1, 0.5),
 					Parent = SliderBack
 				}, {MakeElement("Corner", 0, 5)})
@@ -890,34 +971,8 @@ function XvPxOL:MakeWindow(WindowConfig)
 					Font = Enum.Font.Gotham,
 					Text = tostring(SliderConfig.Default),
 					TextColor3 = Color3.fromRGB(60, 130, 210),
-					TextSize = 12,
+					TextSize = 11,
 					ClearTextOnFocus = false
-				})
-
-				local MinSlider = Create("TextButton", {
-					Parent = SliderBack,
-					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 175, 0.5, 0),
-					AnchorPoint = Vector2.new(0, 0.5),
-					Size = UDim2.new(0, 16, 0, 16),
-					Font = Enum.Font.Gotham,
-					Text = "-",
-					TextColor3 = Color3.fromRGB(60, 130, 210),
-					TextSize = 18,
-					TextWrapped = true
-				})
-
-				local AddSlider = Create("TextButton", {
-					Parent = SliderBack,
-					BackgroundTransparency = 1,
-					Position = UDim2.new(0, 325, 0.5, 0),
-					AnchorPoint = Vector2.new(0, 0.5),
-					Size = UDim2.new(0, 16, 0, 16),
-					Font = Enum.Font.Gotham,
-					Text = "+",
-					TextColor3 = Color3.fromRGB(60, 130, 210),
-					TextSize = 18,
-					TextWrapped = true
 				})
 
 				local function updateFromMouse()
@@ -961,6 +1016,12 @@ function XvPxOL:MakeWindow(WindowConfig)
 					local currentValue = Slider.Value
 					currentValue = math.clamp(currentValue + 1, SliderConfig.Min, SliderConfig.Max)
 					Slider:Set(currentValue)
+				end)
+
+				AddConnection(SliderValue:GetPropertyChangedSignal("Text"), function()
+					TweenService:Create(SliderValBG, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+						Size = UDim2.new(0, math.max(SliderValue.TextBounds.X + 16, 36), 0, 20)
+					}):Play()
 				end)
 
 				function Slider:Set(Value)
